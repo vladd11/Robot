@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
     private final ConnectionManager connectionManager = new ConnectionManager();
     private FusedLocationProviderClient locationClient;
     private PathFinder pathFinder;
+    private StreamingController controller;
 
     private TextView actionTextView;
     private SimpleBluetoothDeviceInterface deviceInterface;
@@ -59,27 +60,12 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
         actionTextView = findViewById(R.id.currentActionText);
         pathFinder = new PathFinder(this);
 
-        final StreamingController controller = new StreamingController(this, findViewById(R.id.surfaceView));
+        controller = new StreamingController(this, findViewById(R.id.surfaceView));
         try {
             controller.start();
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
-
-        connectionManager.connect(() -> {
-            try {
-                connectionManager.getLocationPoints(this::followPathOfPoints);
-                connectionManager.receiveImageRequests(listener -> {
-                    try {
-                        controller.send(listener::received);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
-                });
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
 
         if (BuildConfig.BLUETOOTH) {
             final BluetoothManager bluetoothManager = BluetoothManager.getInstance();
@@ -201,7 +187,8 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode == 0) {
@@ -212,7 +199,40 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
     }
 
     @Override
-    public void endOfPath() {
+    public void whenLocationAccurate() {
+        connectionManager.connect(() -> {
+            try {
+                connectionManager.getLocationPoints(pathFinder.location, this::followPathOfPoints);
+                connectionManager.receiveImageRequests(listener -> {
+                    try {
+                        controller.send((buffer) -> {
+                            Log.d(TAG, "received");
+                            listener.received(buffer);
+                        });
+                    } catch (CameraAccessException e) {
+                        e.printStackTrace();
+                    }
+                }, (roadPosition, frameTime) -> {
+                    for (List<Double> cords : roadPosition) {
+                        double x = cords.get(0) - 0.5f;
+                        //double y = cords.get(1);
 
+                        if (x < -0.2f || x > 0.2) {
+                            if(pathFinder.isFrameValid(frameTime)) {
+                                pathFinder.setAngleDiff((int) (x * 60));
+                            }
+                        }
+                    }
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        connectionManager.disconnect();
+        super.onDestroy();
     }
 }

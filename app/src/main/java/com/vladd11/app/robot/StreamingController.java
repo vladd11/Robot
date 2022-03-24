@@ -11,28 +11,21 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
-import android.hardware.camera2.params.SessionConfiguration;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.os.Handler;
 
 import androidx.annotation.NonNull;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 
 public class StreamingController {
     private static final String TAG = "StreamingController";
@@ -53,21 +46,25 @@ public class StreamingController {
 
     public void send(OnImageReadyListener listener) throws CameraAccessException {
         CaptureRequest.Builder builder = cameraSession.getDevice().createCaptureRequest(
-                CameraDevice.TEMPLATE_STILL_CAPTURE);
+                CameraDevice.TEMPLATE_VIDEO_SNAPSHOT);
         builder.addTarget(imReaderSurface);
         cameraSession.capture(builder.build(), new CameraCaptureSession.CaptureCallback() {
             @Override
             public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
-                final Image image = imageReader.acquireLatestImage();
-                if (image == null) return;
+                imageReader.setOnImageAvailableListener(reader -> {
+                    final Image image = imageReader.acquireLatestImage();
+                    if (image == null) return;
+                    Log.d(TAG, "onCaptureCompleted");
 
-                try {
-                    listener.call(image.getPlanes()[0].getBuffer());
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
 
-                image.close();
+                    try {
+                        listener.call(image.getPlanes()[0].getBuffer());
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    image.close();
+                }, handler);
             }
         }, handler);
     }
