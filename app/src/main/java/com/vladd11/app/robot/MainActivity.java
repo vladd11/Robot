@@ -9,9 +9,9 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.location.Location;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -31,7 +31,6 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Queue;
 
@@ -47,6 +46,9 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
     private StreamingController controller;
 
     private TextView actionTextView;
+    private TextView headingTextView;
+    private TextView bearingTextView;
+
     private SimpleBluetoothDeviceInterface deviceInterface;
 
     @SuppressLint("CheckResult")
@@ -58,7 +60,17 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
         locationClient = LocationServices.getFusedLocationProviderClient(this);
 
         actionTextView = findViewById(R.id.currentActionText);
+        headingTextView = findViewById(R.id.headingTextView);
+        bearingTextView = findViewById(R.id.bearingTextView);
+
+        final Compass compass = new Compass();
         pathFinder = new PathFinder(this);
+
+        compass.setListener(heading -> {
+            pathFinder.onHeadingChanged(heading);
+            headingTextView.setText(String.valueOf(heading));
+        });
+        compass.start(this);
 
         controller = new StreamingController(this, findViewById(R.id.surfaceView));
         try {
@@ -105,19 +117,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
             @SuppressLint("SetTextI18n")
             @Override
             public void onNewData(byte[] data) {
-                if (data[0] == 0xC) { // 0xC means that we should send commands
-                    try {
-                        if (!pathFinder.shouldForward()) {
-                            actionTextView.setText("STOP");
-                            port.write("s".getBytes(StandardCharsets.UTF_8), USB_SERIAL_TIMEOUT);
-                        } else if (pathFinder.getAngle() != Integer.MIN_VALUE) {
-                            port.write(("r" + pathFinder.getAngle()).getBytes(StandardCharsets.UTF_8), USB_SERIAL_TIMEOUT);
-                            actionTextView.setText("ROTATING " + pathFinder.getAngle());
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+                // TODO: make it work again
             }
 
             @Override
@@ -137,23 +137,35 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
 
         // Listen to bluetooth events
         deviceInterface.setListeners(this::onMessageReceived, this::onMessageSent, this::onError);
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final Runnable runnable = new Runnable() {
-            @SuppressLint("SetTextI18n") // TODO: Fix in production
-            @Override
-            public void run() {
-                if (!pathFinder.shouldForward()) {
-                    actionTextView.setText("STOP");
-                    deviceInterface.sendMessage("s");
-                } else if (pathFinder.getAngle() != Integer.MIN_VALUE) {
-                    deviceInterface.sendMessage("r" + pathFinder.getAngle());
-                    actionTextView.setText("ROTATING " + pathFinder.getAngle());
-                }
+    }
 
-                handler.postDelayed(this, 100);
+    @Override
+    public void whenActionChanged(Action action) {
+        if (deviceInterface != null) {
+            switch (action) {
+                case FORWARD:
+                    deviceInterface.sendMessage("f");
+                    break;
+                case BACK:
+                    deviceInterface.sendMessage("b");
+                    break;
+                case LEFT:
+                    deviceInterface.sendMessage("l");
+                    break;
+                case RIGHT:
+                    deviceInterface.sendMessage("r");
+                    break;
+                case STOP:
+                    deviceInterface.sendMessage("s");
+                    break;
             }
-        };
-        runnable.run();
+        }
+        actionTextView.setText(action.toString());
+    }
+
+    @Override
+    public void whenTargetAngleChanged(float angle) {
+        bearingTextView.setText(String.valueOf(angle));
     }
 
     private void onMessageSent(String s) {
@@ -218,7 +230,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
                         //double y = cords.get(1);
 
                         if (x < -0.2f || x > 0.2) {
-                            if(pathFinder.isFrameValid(frameTime)) {
+                            if (pathFinder.isFrameValid(frameTime)) {
                                 pathFinder.setAngleDiff((int) (x * 60));
                             }
                         }
