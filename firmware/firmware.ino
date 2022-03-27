@@ -14,7 +14,6 @@
 
 void setup() {
   Serial.begin(9600);
-
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -26,8 +25,6 @@ void setup() {
 
   digitalWrite(ENA, HIGH);
   digitalWrite(ENB, HIGH);
-
-  Serial.setTimeout(500);
 }
 
 void Back() {
@@ -44,7 +41,7 @@ void Back() {
 bool isForwarding = false;
 
 void Forward() {
-  if (isForwarding) return;
+  if(isForwarding) return;
   isForwarding = true;
   digitalWrite(IN1, LOW);
 
@@ -101,47 +98,40 @@ void Left() {
   digitalWrite(IN4, HIGH);
 }
 
-int current = 0;
-int target = 0;
-bool isStopped = true;
+#ifdef BLUETOOTH
+enum action {LEFT='l', RIGHT='r', FORWARD='f', BACK='b', STOP='s'};
+#else
+enum action {LEFT=0x0, RIGHT=0x1, FORWARD=0x2, BACK=0x3, STOP=0x4};
+#endif
 
 void loop() {
-  //Forward();
-  //sensor.read();
-  
-  /*int diff = target - heading;
-
-  if(abs(diff) > 40) {
-    if(diff < 0) {
-     Left(); 
-    } else Right();
-  } else if(!isStopped) Forward();
-  else Stop();
-  delay(500);
-  //Serial.setTimeout(2147483646);
-
-  if (Serial.available() > 0) {
-    if (Serial.read() == 'r') {
-      target = Serial.parseInt();
-
-      Serial.println(target, DEC);
-      isStopped = false;
-    } else {
-      isStopped = true;
-      Stop();
+  //Serial.write(0xC);
+  while (Serial.available()) {
+    #ifdef BLUETOOTH
+    char val = Serial.read();
+    #else
+    byte val = Serial.read();
+    #endif
+    switch (val) {
+      case LEFT:
+        Left();
+        break;
+      case RIGHT:
+        Right();
+        break;
+      case FORWARD:
+        Forward();
+        Serial.write(val);
+        break;
+      case BACK:
+        Back();
+        break;
+      case STOP:
+        Stop();
+        break;
+      default:
+        //Stop();
+        break;
     }
   }
-
-  if (current < target) {
-    Left();
-  } else if (current > target) {
-    Right();
-  } else if (!isStopped) {
-    Forward();
-  }
-
-  /*if(!(digitalRead(DL) || digitalRead(DR))) {
-    Serial.println('b'); // stuck
-    delay(1000);
-    }*/
 }
