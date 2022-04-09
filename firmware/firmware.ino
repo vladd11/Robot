@@ -51,8 +51,8 @@ void Forward() {
   digitalWrite(IN4, LOW);
 
   delay(250);
-  digitalWrite(ENA, HIGH);
-  digitalWrite(ENB, HIGH);
+  analogWrite(ENA, 75);
+  analogWrite(ENB, 75);
 
   digitalWrite(IN1, HIGH);
 
@@ -74,8 +74,8 @@ void Stop() {
 
 void PrepareForTurn() {
   isForwarding = false;
-  analogWrite(ENA, 200);
-  analogWrite(ENB, 200);
+  analogWrite(ENA, 100);
+  analogWrite(ENB, 100);
 }
 
 void Right() {

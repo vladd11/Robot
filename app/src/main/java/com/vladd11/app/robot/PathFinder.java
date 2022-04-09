@@ -40,11 +40,8 @@ public class PathFinder extends LocationCallback implements Compass.CompassListe
             public void run() {
                 if (isLocationAccurate && target != null) {
                     float relativeBearing = location.bearingTo(target) - heading;
-                    if (relativeBearing < 0) {
-                        relativeBearing = 360 + relativeBearing;
-                    }
 
-                    if (!(almostEqual(relativeBearing, 0, 7) || almostEqual(relativeBearing, 360, 7))) {
+                    if (!(almostEqual(relativeBearing, 0, 14))) {
                         if (relativeBearing < 0) listener.whenActionChanged(Action.LEFT);
                         else listener.whenActionChanged(Action.RIGHT);
                     } else listener.whenActionChanged(Action.FORWARD);
@@ -65,7 +62,7 @@ public class PathFinder extends LocationCallback implements Compass.CompassListe
         }
 
         if (target != null) {
-            if (location.distanceTo(target) > location.getAccuracy()) {
+            if (location.distanceTo(target) > Math.max(location.getAccuracy(), 5)) {
                 shouldForward = true;
             } else nextPoint();
 
@@ -109,7 +106,7 @@ public class PathFinder extends LocationCallback implements Compass.CompassListe
     }
 
     public void setAngleDiff(int angleDiff) {
-        this.diff = angleDiff;
+        //this.diff = angleDiff;
     }
 
     @Override

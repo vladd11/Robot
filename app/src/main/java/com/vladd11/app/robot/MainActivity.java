@@ -9,6 +9,7 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
@@ -48,8 +49,21 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
     private TextView actionTextView;
     private TextView headingTextView;
     private TextView bearingTextView;
+    private TextView diffTextView;
 
     private SimpleBluetoothDeviceInterface deviceInterface;
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (controller.mCameraHelper != null) controller.mCameraHelper.registerUSB();
+    }
+
+    @Override
+    protected void onStop() {
+        if (controller.mCameraHelper != null) controller.mCameraHelper.unregisterUSB();
+        super.onStop();
+    }
 
     @SuppressLint("CheckResult")
     @Override
@@ -62,6 +76,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
         actionTextView = findViewById(R.id.currentActionText);
         headingTextView = findViewById(R.id.headingTextView);
         bearingTextView = findViewById(R.id.bearingTextView);
+        diffTextView = findViewById(R.id.diffTextView);
 
         final Compass compass = new Compass();
         pathFinder = new PathFinder(this);
@@ -141,6 +156,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
 
     @Override
     public void whenActionChanged(Action action) {
+
         if (deviceInterface != null) {
             switch (action) {
                 case FORWARD:
@@ -215,23 +231,20 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
         connectionManager.connect(() -> {
             try {
                 connectionManager.getLocationPoints(pathFinder.location, this::followPathOfPoints);
-                connectionManager.receiveImageRequests(listener -> {
-                    try {
-                        controller.send((buffer) -> {
-                            Log.d(TAG, "received");
-                            listener.received(buffer);
-                        });
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
-                }, (roadPosition, frameTime) -> {
+                connectionManager.receiveImageRequests(listener -> controller.send((buffer) -> {
+                    Log.d(TAG, "received");
+                    listener.received(buffer);
+                }), (roadPosition, frameTime) -> {
                     for (List<Double> cords : roadPosition) {
                         double x = cords.get(0) - 0.5f;
                         //double y = cords.get(1);
 
                         if (x < -0.2f || x > 0.2) {
                             if (pathFinder.isFrameValid(frameTime)) {
-                                pathFinder.setAngleDiff((int) (x * 60));
+                                int diff = (int) (x * 60);
+
+                                diffTextView.setText(String.valueOf(diff));
+                                pathFinder.setAngleDiff(diff);
                             }
                         }
                     }
@@ -244,6 +257,7 @@ public class MainActivity extends AppCompatActivity implements PathFinder.PathFi
 
     @Override
     protected void onDestroy() {
+        controller.stop();
         connectionManager.disconnect();
         super.onDestroy();
     }

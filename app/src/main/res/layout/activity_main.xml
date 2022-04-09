@@ -8,13 +8,19 @@
 
     <TextView
         android:id="@+id/headingTextView"
-        android:layout_width="0dp"
+        android:layout_width="128dp"
         android:layout_height="wrap_content"
         android:text="HEADING"
-        app:layout_constraintBottom_toTopOf="@+id/currentActionText"
-        app:layout_constraintEnd_toStartOf="@+id/bearingTextView"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/diffTextView"
+        android:layout_width="128dp"
+        android:layout_height="wrap_content"
+        android:text="DIFF"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/headingTextView" />
 
     <TextView
         android:id="@+id/bearingTextView"
@@ -22,26 +28,31 @@
         android:layout_height="wrap_content"
         android:text="BEARING"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
-        app:layout_constraintStart_toEndOf="@+id/headingTextView"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/frameLayout"
+        app:layout_constraintTop_toBottomOf="@+id/diffTextView" />
 
     <TextView
         android:id="@+id/currentActionText"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="ACTION"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/headingTextView" />
+        app:layout_constraintStart_toEndOf="@+id/frameLayout"
+        app:layout_constraintTop_toBottomOf="@+id/bearingTextView" />
 
-    <SurfaceView
-        android:id="@+id/surfaceView"
+    <FrameLayout
+        android:id="@+id/frameLayout"
         android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_height="match_parent"
+        app:layout_constraintEnd_toStartOf="@+id/diffTextView"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/currentActionText" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.serenegiant.usb.widget.UVCCameraTextureView
+            android:id="@+id/surfaceView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

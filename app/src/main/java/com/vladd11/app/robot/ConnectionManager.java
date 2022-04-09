@@ -1,6 +1,7 @@
 package com.vladd11.app.robot;
 
 
+import android.hardware.camera2.CameraAccessException;
 import android.location.Location;
 import android.util.Log;
 
@@ -72,7 +73,11 @@ public class ConnectionManager extends WebSocketListener {
     public void onMessage(@NonNull WebSocket webSocket, @NonNull String text) {
         if (text.equals("img")) {
             frameTime = System.currentTimeMillis();
-            onFrameRequest.call(buffer -> webSocket.send(ByteString.of(buffer)));
+            try {
+                onFrameRequest.call(buffer -> webSocket.send(ByteString.of(buffer)));
+            } catch (CameraAccessException | InterruptedException e) {
+                e.printStackTrace();
+            }
         } else if (text.startsWith("route")) {
             final List<List<Double>> rawCoordinates = gson.fromJson(
                     text.replace("route ", ""),
@@ -105,11 +110,11 @@ public class ConnectionManager extends WebSocketListener {
     }
 
     public interface OnImageRequestReceivedListener {
-        void call(ImageReceivedListener listener);
+        void call(ImageReceivedListener listener) throws CameraAccessException, InterruptedException;
     }
 
     public interface ImageReceivedListener {
-        void received(ByteBuffer buffer) throws InterruptedException;
+        void received(byte[] buffer) throws InterruptedException;
     }
 
     public interface OnConnectedListener {

@@ -5,8 +5,14 @@ dependencyResolutionManagement {
         mavenCentral()
         jcenter() // Warning: this repository is going to shut down soon
         maven { url 'https://jitpack.io' }
+        maven { url 'https://raw.github.com/saki4510t/libcommon/master/repository/' }
+
+        flatDir {
+            dirs 'libs', '../libusbcamera/libs'
+        }
     }
 }
 rootProject.name = "Robot"
 include ':app'
 
+include ':libusbcamera'

@@ -4,10 +4,16 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven { url "https://jitpack.io" }
 
         maven {
             url "https://repo.eclipse.org/content/repositories/paho-snapshots/"
+        }
+        maven { url "https://jitpack.io" }
+
+        maven { url 'https://raw.github.com/saki4510t/libcommon/master/repository/' }
+
+        flatDir {
+            dirs 'libs', '../libusbcamera/libs'
         }
     }
     dependencies {

@@ -1,174 +1,136 @@
 package com.vladd11.app.robot;
 
-import android.annotation.SuppressLint;
-import android.content.Context;
-import android.graphics.ImageFormat;
+import android.app.Activity;
+import android.graphics.Bitmap;
 import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
-import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.TotalCaptureResult;
-import android.media.Image;
-import android.media.ImageReader;
+import android.hardware.usb.UsbDevice;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 
-import androidx.annotation.NonNull;
+import com.jiangdg.usbcamera.UVCCameraHelper;
+import com.serenegiant.usb.CameraDialog;
+import com.serenegiant.usb.USBMonitor;
+import com.serenegiant.usb.common.AbstractUVCCameraHandler;
+import com.serenegiant.usb.widget.CameraViewInterface;
+import com.serenegiant.usb.widget.UVCCameraTextureView;
 
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
-public class StreamingController {
+public class StreamingController implements CameraDialog.CameraDialogParent {
+    private static final int WIDTH = 640;
+    private static final int HEIGHT = 480;
     private static final String TAG = "StreamingController";
-    private CameraCaptureSession cameraSession;
-    private Surface imReaderSurface;
-    private ImageReader imageReader;
-    public final int width = 720;
-    public final int height = 1280;
-    private final Context context;
-    private final SurfaceView surfaceView;
+    private final Activity activity;
+    private final CameraViewInterface surfaceView;
     private final Handler handler;
+    public UVCCameraHelper mCameraHelper;
+    private boolean isPreview;
+    private boolean isRequest;
+    private boolean twice;
 
-    public StreamingController(Context context, SurfaceView surfaceView) {
-        this.context = context;
+    public StreamingController(Activity activity, UVCCameraTextureView surfaceView) {
+        this.activity = activity;
         this.surfaceView = surfaceView;
         this.handler = new Handler(Looper.myLooper());
     }
 
-    public void send(OnImageReadyListener listener) throws CameraAccessException {
-        CaptureRequest.Builder builder = cameraSession.getDevice().createCaptureRequest(
-                CameraDevice.TEMPLATE_VIDEO_SNAPSHOT);
-        builder.addTarget(imReaderSurface);
-        cameraSession.capture(builder.build(), new CameraCaptureSession.CaptureCallback() {
-            @Override
-            public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
-                imageReader.setOnImageAvailableListener(reader -> {
-                    final Image image = imageReader.acquireLatestImage();
-                    if (image == null) return;
-                    Log.d(TAG, "onCaptureCompleted");
+    public void send(OnImageReadyListener listener) throws InterruptedException {
+        final ByteArrayOutputStream stream = new ByteArrayOutputStream();
 
+        surfaceView.captureStillImage(WIDTH, HEIGHT).compress(Bitmap.CompressFormat.JPEG, 90, stream);
+        listener.call(stream.toByteArray());
+    }
 
-                    try {
-                        listener.call(image.getPlanes()[0].getBuffer());
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-
-                    image.close();
-                }, handler);
-            }
-        }, handler);
+    public void stop() {
+        if(mCameraHelper != null) {
+            mCameraHelper.unregisterUSB();
+            mCameraHelper.stopPreview();
+        }
     }
 
     public void start() throws CameraAccessException {
-        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+        if(twice) return;
+        twice = true;
+
+        mCameraHelper = UVCCameraHelper.getInstance(640, 480);
+
+        surfaceView.setCallback(new CameraViewInterface.Callback() {
             @Override
-            public void surfaceCreated(@NonNull SurfaceHolder holder) {
-                imageReader = ImageReader.newInstance(width, height, ImageFormat.JPEG, 2);
-
-// Remember to call this only *after* SurfaceHolder.Callback.surfaceCreated()
-                //final Surface previewSurface = surfaceView.getHolder().getSurface();
-                imReaderSurface = imageReader.getSurface();
-                final Surface[] targets = new Surface[]{imReaderSurface, surfaceView.getHolder().getSurface()};
-
-                try {
-                    getBackCamera(device -> {
-                        try {
-                            device.createCaptureSession(Arrays.asList(targets), new CameraCaptureSession.StateCallback() {
-                                @Override
-                                public void onConfigured(@NonNull CameraCaptureSession session) {
-                                    cameraSession = session;
-                                    try {
-                                        CaptureRequest.Builder captureRequest = session.getDevice().createCaptureRequest(
-                                                CameraDevice.TEMPLATE_PREVIEW);
-                                        captureRequest.addTarget(surfaceView.getHolder().getSurface());
-                                        session.setRepeatingRequest(captureRequest.build(), null, handler);
-                                    } catch (CameraAccessException e) {
-                                        e.printStackTrace();
-                                    }
-                                }
-
-                                @Override
-                                public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-
-                                }
-                            }, handler);
-                        } catch (CameraAccessException e) {
-                            e.printStackTrace();
-                        }
-                    });
-                } catch (CameraAccessException e) {
-                    e.printStackTrace();
+            public void onSurfaceCreated(CameraViewInterface view, Surface surface) {
+                if (!isPreview && mCameraHelper.isCameraOpened()) {
+                    mCameraHelper.startPreview(surfaceView);
+                    isPreview = true;
                 }
             }
 
             @Override
-            public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+            public void onSurfaceChanged(CameraViewInterface view, Surface surface, int width, int height) {
 
             }
 
             @Override
-            public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+            public void onSurfaceDestroy(CameraViewInterface view, Surface surface) {
 
             }
         });
+
+        mCameraHelper.setOnPreviewFrameListener(nv21Yuv -> Log.d(TAG, "onPreviewResult: "+nv21Yuv.length));
+        mCameraHelper.setDefaultPreviewSize(WIDTH, HEIGHT);
+        mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_MJPEG);
+// set default preview size
+        /*m
+        mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_MJPEG);*/
+// set default frame format，defalut is UVCCameraHelper.FRAME_FORMAT_MJPEG
+// if using mpeg can not record mp4,please try yuv
+// mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_YUYV);
+        mCameraHelper.initUSBMonitor(activity, surfaceView, new UVCCameraHelper.OnMyDevConnectListener() {
+            @Override
+            public void onAttachDev(UsbDevice device) {
+                Log.d(TAG, "onAttachDev");
+                if (!isRequest) {
+                    isRequest = true;
+                    mCameraHelper.requestPermission(0);
+                }
+            }
+
+            @Override
+            public void onDettachDev(UsbDevice device) {
+                Log.d(TAG, "onDettachDev");
+                if (isRequest) {
+                    isRequest = false;
+                    mCameraHelper.closeCamera();
+                }
+            }
+
+            @Override
+            public void onConnectDev(UsbDevice device, boolean isConnected) {
+                if (isConnected) {
+                    Log.d(TAG, "onConnectDev");
+                } else Log.e(TAG, "onConnectDev: fail");
+            }
+
+            @Override
+            public void onDisConnectDev(UsbDevice device) {
+
+            }
+        });
+        //handler.postDelayed(() -> mCameraHelper.requestPermission(0), 3000);
     }
 
-    @SuppressLint("MissingPermission")
-    public void getBackCamera(OnCameraReadyListener listener) throws CameraAccessException {
-        final CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+    @Override
+    public USBMonitor getUSBMonitor() {
+        return mCameraHelper.getUSBMonitor();
+    }
 
-        final String[] preCameraIds = cameraManager.getCameraIdList();
-        final List<String> cameraIds = new ArrayList<>();
-        // Get list of all compatible cameras
-        for (String id :
-                preCameraIds) {
-            try {
-                final CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                final int[] capabilities = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
-                for (int capability :
-                        capabilities) {
-                    if (capability == CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE) {
-                        cameraIds.add(id);
-                    }
-                }
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // Iterate over the list of cameras and return the first one matching desired
-        // lens-facing configuration
-        for (String id : cameraIds) {
-            final CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-            if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK) {
-                cameraManager.openCamera(id, new CameraDevice.StateCallback() {
-                    @Override
-                    public void onOpened(@NonNull CameraDevice camera) {
-                        listener.call(camera);
-                    }
-
-                    @Override
-                    public void onDisconnected(@NonNull CameraDevice camera) {
-
-                    }
-
-                    @Override
-                    public void onError(@NonNull CameraDevice camera, int error) {
-
-                    }
-                }, handler);
-            }
-        }
+    @Override
+    public void onDialogResult(boolean canceled) {
+        Log.d(TAG, "onDialogResult");
     }
 
     public interface OnCameraReadyListener {
@@ -176,6 +138,6 @@ public class StreamingController {
     }
 
     public interface OnImageReadyListener {
-        void call(ByteBuffer buffer) throws InterruptedException;
+        void call(byte[] buffer) throws InterruptedException;
     }
 }
